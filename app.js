@@ -114,12 +114,12 @@
   let acceptTimer = null;
   let lastRecord = null;
   let submitStatus = '';
-  const startForm = { participant: '', role: '长者', age: '65–74 岁', ebank: '偶尔用', font: '标准', callOutcome: '不接听' };
+  const startForm = { participant: '', role: '长者', age: '65–74 岁' };
 
   const freshS = () => ({
     screen: 'home', introFrom: 'security', simFrom: 'tcDone', bannerOpen: true,
     c1name: '陈家明', c1rel: '子女', c1phone: '5000 0101', c1accepted: false,
-    showC2: false, c2name: '', c2rel: '', c2phone: '', c2accepted: false,
+    showC2: true, c2name: '李美玲', c2rel: '朋友', c2phone: '5000 0202', c2accepted: false,
     s2name: '李美玲', s2rel: '朋友', s2phone: '5000 0202',
     single: 10000, daily: 30000,
     scen: { amount: true, staff: true, safe: true, reach: true },
@@ -139,11 +139,31 @@
   const secs = () => (session ? Math.round((Date.now() - session.t0) / 100) / 10 : 0);
   const ev = (e, v) => { if (session) session.events.push({ t: secs(), e: e, v: v == null ? '' : String(v) }); };
   const savedSessions = () => store.get(STORE_KEY, []);
-  const nextParticipantId = () => 'P' + pad2(savedSessions().length + 1);
+  // 编号 = 这台手机的代号（第一次打开时随机生成，之后固定）+ 这台手机的场次。
+  // 例如 KQT-03。不同手机代号不同，所以不会撞号；场次计数在清除记录后也不会重来。
+  const DEVICE_KEY = 'tc_device_v1';
+  const COUNTER_KEY = 'tc_counter_v1';
+  let volatileDevice = '';
+  function deviceCode() {
+    let code = store.get(DEVICE_KEY, '');
+    if (code) return code;
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    code = Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    if (!store.set(DEVICE_KEY, code)) { volatileDevice = volatileDevice || code; return volatileDevice; }
+    return code;
+  }
+  function nextParticipantId() {
+    const n = Number(store.get(COUNTER_KEY, 0)) + 1;
+    return deviceCode() + '-' + pad2(n);
+  }
+  function commitParticipantId() {
+    const n = Number(store.get(COUNTER_KEY, 0)) + 1;
+    store.set(COUNTER_KEY, n);
+  }
 
   function newSession() {
     session = {
-      participant: startForm.participant.trim(), role: startForm.role, age: startForm.age, ebank: startForm.ebank,
+      participant: startForm.participant.trim(), role: startForm.role, age: startForm.age,
       startedAt: new Date().toISOString(), t0: Date.now(), events: [], answers: {}, afterGuideShown: false,
       m: {
         introAt: null, notNow: 0, setupStartAt: null, setupDoneAt: null, lastSetup: '', scenOff: [], amount: '', c1rel: '', addedC2: false,
@@ -313,7 +333,7 @@
     }, 2600);
   }
   function seedReady() {
-    Object.assign(S, { setupDone: true, c1accepted: true, termsOk: true, bannerOpen: false, setupRef: S.setupRef || 'TC261014038' });
+    Object.assign(S, { setupDone: true, c1accepted: true, c2accepted: !!S.c2name, termsOk: true, bannerOpen: false, setupRef: S.setupRef || 'TC261014038' });
   }
 
   // ---------- 长者端：画面 ----------
@@ -668,20 +688,41 @@ ${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'p
     const n = savedSessions().length;
     const h = `${wm()}<div class="plain">
 <div><h1 class="h1 xl">开始一场测试</h1><p class="ink2" style="margin-top:4px">由组员填写，然后把手机交给参与者。</p></div>
-<label class="field"><span>参与者编号（不要写名字）</span><input class="input" type="text" autocomplete="off" data-bind="participant" value="${esc(startForm.participant)}"></label>
+<button class="row" style="border:1px solid var(--line);border-radius:14px" data-act="openRecords"><span class="tile">${icon('bill', 20)}</span><span class="grow"><span class="blk b">测试记录</span><span class="blk small muted">这台手机已保存 ${n} 场 · 查看、复制、导出</span></span>${chev()}</button>
+<div class="card p" style="flex-direction:row;align-items:center;gap:14px"><div class="grow"><div class="small muted">这一场的编号（自动生成，不会重复）</div><div class="b" style="font-size:1.75em;letter-spacing:2px;line-height:1.3">${esc(startForm.participant)}</div></div></div>
+<p class="mid ink2" style="margin-top:-6px">请把这个编号写在你的笔记上，方便之后对上记录。</p>
 <div class="field"><span>角色</span>${chipList(['长者', '联络人'], startForm.role, 'startOpt', 'role')}</div>
 <div class="field"><span>年龄段</span>${chipList(['55 岁以下', '55–64 岁', '65–74 岁', '75 岁或以上'], startForm.age, 'startOpt', 'age')}</div>
-<div class="field"><span>平时用网上银行吗</span>${chipList(['经常用', '偶尔用', '不用'], startForm.ebank, 'startOpt', 'ebank')}</div>
-<div class="field"><span>字体大小</span>${chipList(['标准', '大'], startForm.font, 'startOpt', 'font')}</div>
-${startForm.role === '长者' ? `<div class="field"><span>联络人接电话吗（出错情境默认「不接听」）</span>${chipList(['不接听', '接通'], startForm.callOutcome, 'startOpt', 'callOutcome')}</div>` : ''}
 ${startForm.err ? `<p class="err" role="alert">${esc(startForm.err)}</p>` : ''}
 <button class="btn p" data-act="startTest">开始测试</button>
-<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">测试中长按顶部「课堂原型」那条（或连按 5 下），可以打开主持人面板。</p><p class="mid">请用预填的虚构资料，不要让参与者输入真实姓名或电话。</p></div></div>
-<div class="card"><a class="row" style="text-decoration:none;color:var(--ink)" href="guide.html"><span class="grow">测试主持卡</span>${chev()}</a>
-<button class="row" data-act="exportCsv"><span class="grow">导出这台手机的全部记录（${n} 场）</span>${chev()}</button>
-<button class="row" data-act="clearAll" style="color:var(--err)"><span class="grow">清除这台手机的记录</span></button></div>
+<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">测试中长按顶部「课堂原型」那条（或连按 5 下），可以打开主持人面板：跳画面、调字体、切换联络人接不接电话、结束并填写问卷。</p><p class="mid">请用预填的虚构资料，不要让参与者输入真实姓名或电话。</p></div></div>
+<a class="btn t" style="text-decoration:none" href="guide.html">测试主持卡</a>
 </div>`;
     return { html: h, key: 'start' };
+  }
+
+  // ---------- 记录页 ----------
+  const recordText = (r) => r.summary + '\n\n— 问卷 —\n' + r.answersText;
+  function renderRecords() {
+    const list = savedSessions();
+    const items = list.map((r, i) => {
+      const d = new Date(r.startedAt);
+      const when = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      return `<div class="qcard"><div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline"><span class="b">${esc(r.participant)} · ${esc(r.role)}</span><span class="small muted">${when} · 用时 ${fmtDur(r.durationSec)}</span></div>
+<details><summary class="mid b" style="color:var(--accent);cursor:pointer;min-height:32px">看这一场的结果</summary><pre class="result" style="white-space:pre-wrap;min-height:0;margin:8px 0 0">${esc(recordText(r))}</pre></details>
+<button class="btn s" style="min-height:44px;font-size:1em" data-act="copyOne" data-arg="${i}">复制这一场</button></div>`;
+    }).reverse().join('');
+    const where = CFG.formAction
+      ? '每一场提交时已送到小组的 Google 表格。这里是这台手机上的备份。'
+      : '还没有设定 Google 表单，记录只保存在这台手机。请用下面的按钮把记录发给组长。';
+    const h = `${wm()}<div class="plain">
+<div><h1 class="h1 xl">测试记录</h1><p class="ink2" style="margin-top:4px">这台手机共 ${list.length} 场。${where}</p></div>
+${list.length ? `<button class="btn p" data-act="copyAll">复制全部记录（可贴到微信或邮件）</button>
+<button class="btn s" data-act="exportCsv">导出 CSV 文件（可用 Excel 打开）</button>${items}` : '<div class="card p"><p class="ink2">还没有记录。做完一场测试、按「提交结果」后，就会出现在这里。</p></div>'}
+<button class="btn g" data-act="backToStart">返回开始页</button>
+${list.length ? '<button class="btn g" style="color:var(--err)" data-act="clearAll">清除这台手机的记录</button>' : ''}
+</div>`;
+    return { html: h, key: 'records' };
   }
 
   // ---------- 问卷、结果 ----------
@@ -709,6 +750,7 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
 <textarea class="result" readonly id="resultText">${esc(r ? r.summary + '\n\n— 问卷 —\n' + r.answersText : '')}</textarea>
 <button class="btn s" data-act="copyResult">复制结果</button>
 <button class="btn p" data-act="nextParticipant">下一位参与者</button>
+<button class="btn g" data-act="openRecords">查看这台手机的全部记录</button>
 </div>`;
     return { html: h, key: 'submitted' };
   }
@@ -769,11 +811,11 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
   }
   function buildRecord() {
     const dur = secs();
-    const head = '参与者：' + session.participant + '（' + session.role + '，' + session.age + '，网上银行：' + session.ebank + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准') + (session.role === '长者' ? '；联络人接电话：' + T.callOutcome : '');
+    const head = '参与者：' + session.participant + '（' + session.role + '，' + session.age + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准') + (session.role === '长者' ? '；联络人接电话：' + T.callOutcome : '');
     const body = session.role === '长者' ? elderSummary() : contactSummary();
     const answersText = questions().map((q, i) => (i + 1) + '. ' + q.q + '\n→ ' + fmtAns(session.answers[q.id])).join('\n');
     return {
-      participant: session.participant, role: session.role, age: session.age, ebank: session.ebank,
+      participant: session.participant, role: session.role, age: session.age,
       startedAt: session.startedAt, durationSec: Math.round(dur), summary: head + '\n' + body, answersText: answersText,
       answers: session.answers, events: session.events
     };
@@ -792,8 +834,8 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
   }
   function csvOf(list) {
     const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const head = ['参与者', '角色', '年龄段', '网上银行', '开始时间', '用时（秒）', '摘要', '问卷答案', '事件记录'];
-    const rows = list.map((r) => [r.participant, r.role, r.age, r.ebank, r.startedAt, r.durationSec, r.summary, r.answersText, JSON.stringify(r.events)].map(cell).join(','));
+    const head = ['参与者', '角色', '年龄段', '开始时间', '用时（秒）', '摘要', '问卷答案', '事件记录'];
+    const rows = list.map((r) => [r.participant, r.role, r.age, r.startedAt, r.durationSec, r.summary, r.answersText, JSON.stringify(r.events)].map(cell).join(','));
     return '﻿' + [head.map(cell).join(',')].concat(rows).join('\r\n');
   }
   function download(name, text) {
@@ -807,13 +849,32 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     } catch (e) { window.alert('这台手机不能下载文件，请改用「复制结果」。'); }
   }
   function copyText(text) {
-    const done = () => window.alert('已复制。');
-    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done)); }
-    else fallbackCopy(text, done);
+    const done = () => window.alert('已复制，可以粘贴到微信或邮件。');
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { ta.setSelectionRange(0, text.length); } catch (e) { /* 忽略 */ }
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      if (ok) done(); else window.alert('复制失败。请打开「看这一场的结果」，长按文字手动复制。');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
   }
-  function fallbackCopy(text, done) {
-    const ta = document.getElementById('resultText');
-    if (ta) { ta.removeAttribute('readonly'); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { window.alert('请长按文字手动复制。'); } ta.setAttribute('readonly', ''); }
+  function shareOrDownload(name, text) {
+    try {
+      const file = new File([text], name, { type: 'text/csv' });
+      if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: name }).catch(() => {});
+        return;
+      }
+    } catch (e) { /* 改用下载 */ }
+    download(name, text);
   }
 
   // ---------- 动作 ----------
@@ -827,7 +888,7 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     openTC: () => nav(S.setupDone ? 'tcManage' : 'tcIntro', { introFrom: 'security' }),
     notNow: () => { session.m.notNow += 1; ev('tap', '以后再说'); nav(S.introFrom); },
     // 登记
-    showC2: () => { S.showC2 = true; render(); },
+    showC2: () => { Object.assign(S, { showC2: true, c2name: S.c2name || '李美玲', c2rel: S.c2rel || '朋友', c2phone: S.c2phone || '5000 0202' }); render(); },
     hideC2: () => { Object.assign(S, { showC2: false, c2name: '', c2rel: '', c2phone: '' }); render(); },
     rel: (arg) => { const i = arg.indexOf('|'); S[arg.slice(0, i)] = arg.slice(i + 1); S.formError = ''; render(); },
     toScenarios: () => {
@@ -939,10 +1000,11 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     // 开始页
     startOpt: (arg) => { const i = arg.indexOf('|'); startForm[arg.slice(0, i)] = arg.slice(i + 1); render(); },
     startTest: () => {
-      if (!startForm.participant.trim()) { startForm.err = '请填写参与者编号。'; render(); return; }
+      startForm.participant = nextParticipantId();
+      commitParticipantId();
       startForm.err = '';
-      T.big = startForm.font === '大';
-      T.callOutcome = startForm.callOutcome;
+      T.big = false;
+      T.callOutcome = '不接听';
       T.afterGuide = false;
       newSession();
       if (startForm.role === '长者') { S = freshS(); C = null; mode = 'elder'; ev('screen', '首页'); }
@@ -952,12 +1014,19 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     exportCsv: () => {
       const list = savedSessions();
       if (!list.length) { window.alert('这台手机还没有记录。'); return; }
-      download('指定联络人测试记录.csv', csvOf(list));
+      shareOrDownload('指定联络人测试记录.csv', csvOf(list));
     },
     clearAll: () => {
       if (!window.confirm('清除这台手机上的全部测试记录？已送出到表格的不受影响。')) return;
       store.set(STORE_KEY, []); startForm.participant = ''; render();
     },
+    openRecords: () => { if (mode === 'submitted') resetAll(); mode = 'records'; render(); },
+    backToStart: () => { mode = 'start'; render(); },
+    copyAll: () => {
+      const list = savedSessions();
+      copyText(list.map(recordText).join('\n\n==========\n\n'));
+    },
+    copyOne: (i) => { const r = savedSessions()[Number(i)]; if (r) copyText(recordText(r)); },
     // 问卷
     ans: (arg) => { const i = arg.indexOf('|'); const id = arg.slice(0, i), v = arg.slice(i + 1); session.answers[id] = session.answers[id] === v ? '' : v; render(); },
     ansMulti: (arg) => {
@@ -995,6 +1064,7 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     if (mode === 'start') out = renderStart();
     else if (mode === 'survey') out = renderSurvey();
     else if (mode === 'submitted') out = renderSubmitted();
+    else if (mode === 'records') out = renderRecords();
     else if (mode === 'contact') out = renderContact();
     else out = renderElder();
     const oldScroll = app.querySelector('.scroll, .plain');
