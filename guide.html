@@ -16,17 +16,13 @@ h2{font-size:1.2em;margin:28px 0 10px}
 p{margin:0 0 10px}
 a{color:#1D4E89}
 .card{background:#fff;border:1px solid #E3E7EC;border-radius:14px;padding:14px 16px;margin-bottom:12px}
-.task{display:flex;gap:12px;align-items:flex-start}
-.n{flex:none;width:30px;height:30px;border-radius:50%;background:#1D4E89;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;margin-top:2px}
-.say{background:#EAF0F8;border-radius:10px;padding:8px 12px;margin:6px 0}
-.look{color:#3D4754;font-size:.94em}
+.big{background:#FFF1B8;border:1px solid #E5CF73;border-radius:14px;padding:14px 16px;margin-bottom:12px;font-weight:700}
 ul,ol{margin:0;padding-left:22px}
 li{margin:4px 0}
-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #E3E7EC;border-radius:14px;overflow:hidden;font-size:.94em}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #E3E7EC;font-size:.94em}
 th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #E3E7EC;vertical-align:top}
 th{background:#F3F5F8}
 .muted{color:#55606E}
-.tag{display:inline-block;padding:0 8px;border-radius:10px;background:#EAF0F8;color:#1D4E89;font-size:.82em;font-weight:700}
 </style>
 </head>
 <body>
@@ -34,73 +30,59 @@ th{background:#F3F5F8}
 <main>
 <p><a href="./">← 回到原型</a></p>
 <h1>测试主持卡</h1>
-<p class="muted">指定联络人 · 嵌入银行 App 版 · 长者约 15 分钟，联络人约 5 分钟</p>
+<p class="muted">长者约 10 分钟，联络人约 5 分钟。参与者自己看、自己按、自己填问卷。</p>
 
-<h2>开始前</h2>
+<div class="big">组员只做三件事：按「开始测试」，把手机交给参与者，等他把手机还给你。中间不用说话。</div>
+
+<h2>步骤</h2>
 <div class="card"><ol>
-<li>用自己的手机打开原型网址，先「加到主画面」（iPhone：Safari › 分享 › 加到主画面；Android：Chrome › ⋮ › 加到主屏幕）。</li>
-<li>在开始页选「长者」或「联络人」。页面会自动给这一场一个编号（例如 KQT-03），<b>把编号抄在你的笔记上</b>，之后才能把笔记和记录对上。不要记参与者的名字。</li>
-<li>按「开始测试」后，会先出现一页<b>给组员看的测试说明</b>（要测什么、要照读的话、会记录什么）。读完再把手机交给参与者。测试中长按顶部那条，可以再看一次说明。</li>
-<li>口头说明：这是课堂作业的原型，不是真的银行 App，不会转钱；我们会记录你按了什么，不记你的名字。参与者同意后才开始。</li>
-<li>按「开始测试」，再把手机交给参与者。</li>
+<li>开始页选「长者」或「联络人」，把页面上的编号（例如 KQT-03）抄下来。不要记参与者的名字。</li>
+<li>按「开始测试」，把手机交给参与者。第一页会告诉他这是课堂作业、不会转钱、可以随时停，他按「我明白，开始」就算同意。</li>
+<li>参与者照着屏幕上方的<b>黄色任务条</b>做，做完按「做完了」。最后自己填问卷、按「提交」。</li>
+<li>看到「谢谢你！请把手机还给组员」，就是做完了。你可以在下方复制结果，或按「下一位参与者」。</li>
 </ol></div>
 
-<h2>主持时要记住</h2>
+<h2>组员不要做的</h2>
 <div class="card"><ul>
-<li><b>只给任务，不讲解。</b>参与者问「这个是什么」，反问「你觉得是什么？」</li>
-<li>请参与者<b>边看边说出想法</b>，把原话记下来。</li>
-<li><b>问行为，不问意见。</b>问「你现在会按哪里？」，不问「你喜欢吗？」</li>
-<li>不要替参与者按。卡住超过 1 分钟，才可以提示一句。</li>
-<li>需要跳过某一段，<b>长按顶部「课堂原型」那条</b>（或连按 5 下），打开主持人面板。</li>
+<li>不要讲解，不要提示入口在哪里，不要替他按。</li>
+<li>不要扮演任何角色，也不要催他。</li>
+<li>参与者问你，只说：「按你觉得对的去做就可以。」</li>
+<li>不要替他填问卷。如果他看不清字，可以长按顶部那条，把字体调大。</li>
 </ul></div>
 
-<h2>长者：四个任务</h2>
-<div class="card task"><span class="n">1</span><div>
-<div class="say">「银行 App 有一个新功能，你看看。如果你觉得有用，就把它设定好。」</div>
-<p class="look">从首页开始，不要指出邀请卡在哪里。留意：有没有找到入口、在介绍页停多久、有没有按「以后再说」、第 2 步关掉哪几项、金额改不改、有没有看「情境模拟」。</p>
-</div></div>
-<div class="card task"><span class="n">2</span><div>
-<div class="say">「你的『儿子』刚打电话来，说急需 20 万，叫你马上转到他的新户口：黄志伟。」</div>
-<p class="look">由另一位组员扮「儿子」在旁边催：「快点转！别告诉银行！」看到「这笔交易先停一停」时，留意第一个按哪个按钮。联络人默认<b>不接电话</b>，看他接下来怎么做。</p>
-</div></div>
-<div class="card task"><span class="n">3</span><div>
-<div class="say">「对方说你设定的金额太低，叫你在设定里把单笔调高到 5 万。」</div>
-<p class="look">留意：找不找得到地方改、看到「要等 24 小时」后是提交还是放弃、有没有起疑心。</p>
-</div></div>
-<div class="card task"><span class="n">4</span><div>
-<div class="say">（可选）「你想用智安存里的钱，请申请解锁。」</div>
-<p class="look">留意：有没有注意到会通知联络人。</p>
-</div></div>
-<div class="card"><p><b>做完后：</b>长按顶部那条 › 「结束操作，填写问卷」。由你读题、代按，开放题记下原话，然后按「提交结果」。</p></div>
+<h2>什么时候才介入</h2>
+<div class="card"><ul>
+<li>参与者完全卡住、明显想放弃：长按顶部「课堂原型」那条（或连按 5 下），按「跳过任务」。</li>
+<li>参与者不想继续：在同一个面板按「直接结束，填写问卷」或「放弃这一场」。</li>
+<li>跳过和提早结束都会自动写进结果，分析时要把这几场分开看。</li>
+</ul></div>
 
-<h2>联络人：一个任务</h2>
-<div class="card task"><span class="n">1</span><div>
-<p class="look">先请参与者读手机上的角色卡：他是陈家明，爸爸陈国强几个星期前登记了他做指定联络人。</p>
-<div class="say">「你刚收到几条讯息，看看有什么。」</div>
-<p class="look">不要提示哪一条是银行的。留意先点开哪条、在汇丰那条停多久、有没有点开诈骗短讯。然后问：「收到这条，你会怎么做？」</p>
-<p class="look">问完后，在主持人面板把「事后指引短讯」改成「显示」，请他再看一次，问：「看了这条，你会怎么做？」最后填问卷。</p>
-</div></div>
+<h2>参与者会看到什么</h2>
+<table>
+<tr><th>角色</th><th>屏幕上的任务</th><th>测什么</th></tr>
+<tr><td>长者</td><td><b>任务 1</b>：银行 App 有一个新功能，看看，觉得有用就设定好。</td><td>找不找得到、愿不愿意开（B）、金额改不改（C）</td></tr>
+<tr><td>长者</td><td><b>任务 2</b>：假设有人自称警察，要你把 20 万转到「安全户口」。照他说的转账。<br><span class="muted">任务 1 没有设定的人，会自动假设已开通，所以每个人都会看到暂停画面。</span></td><td>看到「先停一停」后先按哪个按钮</td></tr>
+<tr><td>长者</td><td>问卷 6 题</td><td>明白联络人不能做什么（A）、愿意开（B）、对暂停的感受</td></tr>
+<tr><td>联络人</td><td>假设你是陈家明，爸爸登记了你做联络人。看看收到的短讯。</td><td>认不认得出真通知、会不会打给家人或官方热线（D）</td></tr>
+</table>
 
 <h2>及格线（测试前已定好）</h2>
 <table>
 <tr><th>假设</th><th>看什么</th><th>及格线</th></tr>
-<tr><td><span class="tag">A</span> 明白联络人不能做什么</td><td>问卷两题都答「不可以」</td><td>至少八成</td></tr>
-<tr><td><span class="tag">B</span> 愿意开这个服务</td><td>完成登记，并且问卷答「一定会」或「可能会」</td><td>至少六成</td></tr>
-<tr><td><span class="tag">C</span> 金额</td><td>接受建议还是修改、为什么</td><td>只观察</td></tr>
-<tr><td><span class="tag">D</span> 联络人会做对的事</td><td>选「打官方热线」或「打给家人」，而且没有选「回复或点链接」</td><td>至少八成</td></tr>
+<tr><td>A 明白联络人不能做什么</td><td>问卷两题都答「不可以」</td><td>至少八成</td></tr>
+<tr><td>B 愿意开这个服务</td><td>问卷答「一定会」或「可能会」</td><td>至少六成</td></tr>
+<tr><td>C 金额</td><td>接受建议还是修改</td><td>只观察</td></tr>
+<tr><td>D 联络人会做对的事</td><td>选「打电话给爸爸」或「打官方热线」，而且没有选「回复短讯或点链接」</td><td>至少八成</td></tr>
 </table>
-<p class="muted" style="margin-top:8px">另外留意：暂停画面第一个按「打给我的联络人」或「取消这笔交易」的比例；任务 3 有多少人在「要等 24 小时」时放弃。</p>
 
 <h2>数据去了哪里</h2>
 <div class="card"><ul>
-<li>按「提交结果」后，会送到小组的 Google 表格，同时保存在这台手机。</li>
-<li>没有网络或送出失败：在结果页按「复制结果」，发给组长。</li>
-<li>开始页最上面的「测试记录」：可以逐场查看、复制全部记录（贴到微信或邮件），或导出 CSV（用 Excel 打开）。</li>
-<li>自动记录只告诉你「做了什么」，「为什么」要靠你记下的原话。</li>
+<li>按「提交」后，会送到小组的 Google 表格（如已设定），同时保存在这台手机。</li>
+<li>开始页最上面的「测试记录」：可以复制全部记录，或导出 CSV（用 Excel 打开）。</li>
 </ul></div>
 
 <h2>测试局限（写进报告）</h2>
-<div class="card"><p>样本小，参与者多是组员的亲友，结果可能偏乐观；测试时没有真的骗子施压，长者比真实情况冷静；原型不会真的转账或发短讯。</p></div>
+<div class="card"><p>样本小，参与者多是组员的亲友，结果可能偏乐观。测试时没有骗子施压，任务是写在屏幕上的，长者会比真实情况冷静。原型不会真的转账或发短讯。</p><p>原型只测了 App 转账。香港长者常遇到的「猜猜我是谁」多以现金交收（在家拿钱或到银行提款），柜台和上门收钱这部分没有测到。</p></div>
 </main>
 </body>
 </html>

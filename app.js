@@ -85,22 +85,23 @@
   };
   const SETUP_SCREENS = ['tcIntro', 'tcContact', 'tcScenarios', 'tcAmount', 'tcReview'];
 
+  // 问卷由参与者自己作答
   const Q_ELDER = [
-    { id: 'a1', tag: 'A', q: '联络人可以看你的余额吗？', type: 'one', opts: ['可以', '不可以', '不知道'] },
-    { id: 'a2', tag: 'A', q: '联络人可以替你批准或拒绝转账吗？', type: 'one', opts: ['可以', '不可以', '不知道'] },
-    { id: 'b1', tag: 'B', q: '如果银行真的推出这个服务，你会开吗？', type: 'one', opts: ['一定会', '可能会', '说不定', '可能不会', '一定不会'] },
-    { id: 'e1', tag: '', q: '整体来说，容不容易用？', type: 'one', opts: ['很容易', '容易', '一般', '难', '很难'] },
-    { id: 'p1', tag: '', q: '看到「这笔交易先停一停」，你怎么想？（记下原话）', type: 'text' },
-    { id: 'w1', tag: '', q: '你最不喜欢哪里？', type: 'text' },
-    { id: 'n1', tag: '', q: '主持人备注（卡住的地方、看不懂的字等）', type: 'text' }
+    { id: 'a1', q: '联络人可以看你的余额吗？', type: 'one', opts: ['可以', '不可以', '不知道'] },
+    { id: 'a2', q: '联络人可以替你批准或拒绝转账吗？', type: 'one', opts: ['可以', '不可以', '不知道'] },
+    { id: 'b1', q: '如果银行真的推出这个服务，你会开吗？', type: 'one', opts: ['一定会', '可能会', '说不定', '可能不会', '一定不会'] },
+    { id: 'p1', q: '转账时看到「这笔交易先停一停」，你觉得怎样？', type: 'one', opts: ['安心，多一个人帮我留意', '有点麻烦，但可以接受', '很烦，妨碍我用钱', '看不明白', '没有看到这个画面'] },
+    { id: 'e1', q: '整体来说，容不容易用？', type: 'one', opts: ['很容易', '容易', '一般', '难', '很难'] },
+    { id: 't1', q: '还有什么想说？（可以不填）', type: 'text' }
   ];
   const Q_CONTACT = [
-    { id: 'd0', tag: 'D', q: '请他指出哪一条是真的银行通知', type: 'one', opts: ['#HSBC（正确）', '+852 6000 4410（诈骗）', '+852 6000 1827（诈骗）', '其他', '认不出'] },
-    { id: 'd1', tag: 'D', q: '收到汇丰那条短讯，你会怎么做？（可多选）', type: 'multi', opts: ['亲自打给家人（长者）', '打通讯录里的银行官方热线', '回复或点链接', '不理会', '其他'] },
-    { id: 'd2', tag: '', q: '看了事后指引短讯，你会怎么做？（记下原话）', type: 'text' },
-    { id: 'w1', tag: '', q: '你最不喜欢哪里？', type: 'text' },
-    { id: 'n1', tag: '', q: '主持人备注', type: 'text' }
+    { id: 'd0', q: '刚才哪一条是真的银行通知？', type: 'one', opts: ['#HSBC', '+852 6000 4410（户口安全）', '+852 6000 1827（速递通知）', '都不是', '认不出'] },
+    { id: 'd1', q: '收到那条银行通知，你会怎么做？（可以选多项）', type: 'multi', opts: ['亲自打电话给爸爸', '打通讯录里的银行官方热线', '回复短讯或点链接', '不理会', '其他'] },
+    { id: 't1', q: '还有什么想说？（可以不填）', type: 'text' }
   ];
+  // 屏幕上的任务提示（参与者自己看，组员不用读）
+  const TASK_SHORT = { 1: '看看新功能，觉得有用就设定好', 2: '照对方说的，转 20 万给黄志伟' };
+  const CONTACT_SHORT = '你是陈家明 · 看看收到的短讯';
 
   // ---------- 状态 ----------
   let mode = 'start';           // start | elder | contact | survey | submitted
@@ -163,9 +164,11 @@
 
   function newSession() {
     session = {
-      participant: startForm.participant.trim(), role: startForm.role, started: false,
-      startedAt: new Date().toISOString(), t0: Date.now(), events: [], answers: {}, afterGuideShown: false,
+      participant: startForm.participant.trim(), role: startForm.role,
+      startedAt: new Date().toISOString(), t0: Date.now(), events: [], answers: {}, surveyErr: '',
+      task: 0, card: startForm.role === '长者' ? 'intro' : 'cintro', reopen: false,
       m: {
+        task1: '', task2: '', autoSeeded: false, task2From: 0,
         introAt: null, notNow: 0, setupStartAt: null, setupDoneAt: null, lastSetup: '', scenOff: [], amount: '', c1rel: '', addedC2: false,
         simMax: 0, pauseAt: null, pauseFirst: '', pauseFirstSec: null, opens: [], hsbcDwell: 0
       }
@@ -178,6 +181,62 @@
     Object.assign(S, { screen: screen, notice: '', formError: '', sheet: '' }, extra || {});
     if (screen === 'messages') S.unread = 0;
     if (prev !== screen) { ev('screen', SCREEN_NAMES[screen] || screen); onScreen(screen); }
+    // 任务自动完成：任务 1 登记好后回到管理页或首页；任务 2 转过账后回到首页
+    if (session && prev !== screen) {
+      if (session.task === 1 && S.setupDone && (screen === 'tcManage' || screen === 'home')) { completeTask(1); return; }
+      if (session.task === 2 && screen === 'home' && task2Events().some((e) => e.e === 'transfer')) { completeTask(2); return; }
+    }
+    render();
+  }
+  const task2Events = () => session.events.slice(session.m.task2From || 0);
+  function task2Result() {
+    const m = session.m, E = task2Events();
+    if (!E.some((e) => e.e === 'transfer')) return '没有转账';
+    if (m.pauseAt == null) return '直接转出（没有暂停）';
+    let r = '看到暂停，' + (m.pauseFirst ? '先按「' + m.pauseFirst + '」' : '没有按任何按钮');
+    if (E.some((e) => e.e === 'cancel-confirm')) r += '，最后取消了交易';
+    return r;
+  }
+  function completeTask(n, how) {
+    const m = session.m;
+    const at = '（第 ' + Math.round(secs()) + ' 秒' + (how ? '，' + how : '') + '）';
+    session.task = 0; session.reopen = false;
+    if (n === 1) {
+      const r = S.setupDone ? '完成登记' : '没有登记';
+      m.task1 = r + at;
+      ev('task-done', '任务1：' + r + (how ? '（' + how + '）' : ''));
+      Object.assign(S, { sheet: '', callState: '' });
+      session.card = 'task2';
+      render();
+    } else if (n === 2) {
+      const r = task2Result();
+      m.task2 = r + at;
+      ev('task-done', '任务2：' + r + (how ? '（' + how + '）' : ''));
+      toSurvey();
+    } else {
+      ev('task-done', '看短讯' + (how ? '（' + how + '）' : ''));
+      toSurvey();
+    }
+  }
+  // 任务 1 没有登记的人，任务 2 前假设已开通（用默认设定），这样每个人都会测到暂停画面
+  function seedForTask2() {
+    if (S.setupDone) return;
+    session.m.autoSeeded = true;
+    Object.assign(S, {
+      c1name: S.c1name.trim() || '陈家明', c1phone: S.c1phone.trim() || '5000 0101', c1rel: S.c1rel || '子女',
+      scen: { amount: true, staff: true, safe: true, reach: true }, single: 10000, daily: 30000
+    });
+    seedReady();
+    ev('auto-seed', '任务1没有登记，任务2前假设已开通');
+  }
+  function toSurvey() {
+    panelOpen = false;
+    if (mode === 'contact' && C) closeThread();
+    clearTimeout(callTimer);
+    if (S) { S.callState = ''; S.sheet = ''; }
+    if (session) { session.card = null; session.task = 0; }
+    ev('end', '');
+    mode = 'survey';
     render();
   }
   function onScreen(screen) {
@@ -367,7 +426,7 @@ ${paused}${banner}
   V.transferReview = () => ({ title: '确认转账', back: 'transfer', body: `<div class="pad">
 <div class="center" style="padding:6px 0"><div class="small muted">转账金额</div><div class="b" style="font-size:1.875em;line-height:1.3">${money(S.reviewAmount)}</div></div>
 <div class="kvs">${kv('由', '综合户口 · 储蓄')}${kv('至', '黄志伟<br>888-123456-001')}${kv('方式', '转数快')}${kv('手续费', 'HKD 0.00')}${kv('时间', '即时')}</div>
-${info('<p class="mid">转账前请确认收款人身份。如果有人自称亲友、说换了新户口，请先打他原来的电话核实。</p>')}
+${info('<p class="mid">转账前请确认收款人身份。如有怀疑，请先致电防骗易热线 18222。</p>')}
 </div>`, footer: `<button class="btn p" data-act="verifyTransfer">确认转账</button>` });
 
   V.pause = () => {
@@ -504,7 +563,7 @@ ${sec('什么时候通知联络人')}<div class="kvs">${SCEN.map((sc) => kv('<sp
 
   V.sim1 = () => ({ title: '情境模拟', back: S.simFrom, body: `${simBar()}<div class="pad" style="padding-top:16px">
 <h1 class="h1">如果有人叫你转一大笔钱</h1>
-<p class="ink2">假设有人来电，自称是你的儿子，说急需 20 万，叫你马上转到一个新户口。你转账时会看到：</p>
+<p class="ink2">假设有个陌生号码打来，自称是警察或你的亲人，要你马上转 20 万，还叫你不要告诉任何人。你转账时会看到：</p>
 <div class="mock"><div class="circle warn" style="width:52px;height:52px">${icon('pause', 24, 2.6)}</div><div class="b" style="font-size:1.125em">这笔交易先停一停</div><div class="mid ink2">交易会暂停 24 小时，我们也会通知 ${esc(S.c1name)}。</div>
 <div class="stack" style="width:100%;gap:8px;margin-top:4px"><div class="fake" style="background:var(--accent);color:#fff">打给我的联络人</div><div class="fake" style="border:1.5px solid var(--accent);color:var(--accent)">取消这笔交易</div><div class="fake" style="color:var(--accent);padding:6px">急需用钱：到分行核实</div></div></div>
 </div>`, footer: `<button class="btn p" data-act="go" data-arg="sim2">下一步（1/3）</button>` });
@@ -575,6 +634,53 @@ ${S.formError ? `<p class="err" role="alert">${esc(S.formError)}</p>` : ''}
   const STEP_NAME = { 1: '联络人', 2: '什么时候通知', 3: '确认' };
   const wm = () => '<div class="wm">课堂原型，非汇丰官方</div>';
 
+  // ---------- 任务提示（参与者自己看） ----------
+  const tasktext = (paras) => `<div class="tasktext">${paras.map((p) => `<p>${p}</p>`).join('')}</div>`;
+  function taskbarHtml() {
+    if (!session || session.card) return '';
+    if (mode === 'contact') {
+      if (session.task !== 3) return '';
+      return `<div class="taskbar"><button class="tt" data-act="reopenTask"><b>你的任务</b>${CONTACT_SHORT}</button><button class="done" data-act="askDone">看完了</button></div>`;
+    }
+    if (!session.task) return '';
+    return `<div class="taskbar"><button class="tt" data-act="reopenTask"><b>任务 ${session.task}（共 2 个）</b>${TASK_SHORT[session.task]}</button><button class="done" data-act="askDone">做完了</button></div>`;
+  }
+  function cardPage() {
+    const c = session.card;
+    const cont = session.reopen;
+    const go = (label) => `<button class="btn p" data-act="cardGo">${cont ? '继续' : label}</button>`;
+    const hello = `<div><h1 class="h1 xl">你好，谢谢你帮忙</h1><p class="ink2" style="margin-top:4px">请先看完这一页。</p></div>`;
+    const about = (what) => tasktext([
+      '这是我们课堂作业做的' + what + '样板，<b>不是真的银行</b>，不会转钱，也不会发短讯。',
+      '请按你平时的习惯操作，<b>没有对错</b>。我们想知道哪里好用、哪里不好用。',
+      '我们只记录你按了什么，不记你的名字。',
+      '想停下来，随时可以把手机还给组员。'
+    ]);
+    let body = '';
+    if (c === 'intro') {
+      body = `${hello}${about('银行 App ')}
+<div class="card p"><div class="b">一共 2 个小任务，大约 10 分钟</div><p class="ink2">屏幕上方<b>黄色那条</b>会写着你现在的任务。做完一个，就按那条右边的「做完了」。最后有几个问题。</p></div>
+<button class="btn p" data-act="cardGo">我明白，开始</button><button class="btn g" data-act="decline">我不想参加</button>`;
+    } else if (c === 'task1') {
+      body = `<div><p class="small b" style="color:var(--accent)">任务 1（共 2 个）</p><h1 class="h1 xl">看看新功能</h1></div>
+${tasktext(['银行 App 里有一个新功能。请你自己看看。', '如果你觉得有用，就把它设定好；觉得没用，也可以不设定。', '做完后，按上方黄色那条的「做完了」。'])}${go('开始')}`;
+    } else if (c === 'task2') {
+      const done = (!cont && session.m.task1) ? `<div class="okbox" style="padding:12px 16px">${icon('check', 22, 2.6)}<p class="b">任务 1 做完了</p></div>` : '';
+      body = `${done}<div><p class="small b" style="color:var(--accent)">任务 2（共 2 个）</p><h1 class="h1 xl">有人叫你转钱</h1></div>
+${tasktext(['假设有个陌生号码打来，自称是<b>警察</b>。他说你的户口涉及洗黑钱，要你马上把 <b>20 万</b>转到「安全户口」，收款人是<b>黄志伟</b>，还叫你不要告诉任何人。', '请照他说的，用这个 App 转账，看看会发生什么。这只是测试，不会真的转钱。', '做完后，按上方黄色那条的「做完了」。'])}
+${(!S.setupDone || session.m.autoSeeded) ? info('<p class="mid">这一次，假设你已经开了「指定联络人」，联络人是' + esc(S.c1name.trim() || '陈家明') + '。</p>') : ''}${go('开始')}`;
+    } else if (c === 'cintro') {
+      body = `${hello}${about('手机短讯')}
+<div class="card p"><div class="b">请你假设</div><p>你叫<b>陈家明</b>。你爸爸<b>陈国强</b>一个人住。几个星期前，他在银行登记了你做他的「指定联络人」。</p><p>现在你的手机收到了几条短讯。请像平时一样看看。看完后，按上方黄色那条的「看完了」。最后有几个问题。</p></div>
+${cont ? go('') : '<button class="btn p" data-act="cardGo">我明白，开始</button><button class="btn g" data-act="decline">我不想参加</button>'}`;
+    } else if (c === 'confirm') {
+      const contact = mode === 'contact';
+      body = `<div class="center" style="padding-top:24px"><h1 class="h1 xl">${contact ? '看完了吗？' : '任务 ' + session.task + ' 做完了吗？'}</h1></div>
+<button class="btn p" data-act="confirmDone">${contact ? '看完了' : '做完了'}</button><button class="btn s" data-act="cardBack">还没有，继续</button>`;
+    }
+    return { html: wm() + `<div class="plain">${body}</div>` + (panelOpen ? panelHtml() : ''), key: 'card:' + c + (cont ? ':re' : '') };
+  }
+
   function sheetHtml() {
     let inner = '';
     if (S.sheet === 'verify') {
@@ -605,8 +711,9 @@ ${warn('<p class="b mid">如果有人叫你改设定、别告诉家人，很可�
   }
 
   function renderElder() {
+    if (session && session.card) return cardPage();
     const v = V[S.screen]();
-    let h = wm();
+    let h = wm() + taskbarHtml();
     if (!v.tab) h += `<div class="nav"><div>${v.back ? `<button class="iconbtn" aria-label="返回" data-act="go" data-arg="${v.back}">${icon('back', 26, 2.2)}</button>` : ''}</div><h2>${esc(v.title)}</h2><div></div></div>`;
     if (v.step) h += `<div class="prog"><div class="bars">${[1, 2, 3].map((n) => `<i class="${v.step >= n ? 'on' : ''}"></i>`).join('')}</div><p>第 ${v.step} 步，共 3 步：${STEP_NAME[v.step]}</p></div>`;
     h += `<div class="scroll">${v.body}</div>`;
@@ -644,9 +751,10 @@ ${warn('<p class="b mid">如果有人叫你改设定、别告诉家人，很可�
     C.open = null;
   }
   function renderContact() {
+    if (session && session.card) return cardPage();
     const list = threads();
     const cur = list.find((t) => t.id === C.open);
-    let h = wm();
+    let h = wm() + taskbarHtml();
     if (!cur) {
       h += `<div class="sms"><div class="smshead"><h1 class="h1" style="font-size:2em">讯息</h1></div><div class="scroll">${list.map((t) => {
         const last = t.msgs[t.msgs.length - 1];
@@ -666,19 +774,12 @@ ${warn('<p class="b mid">如果有人叫你改设定、别告诉家人，很可�
   // ---------- 主持人面板 ----------
   function panelHtml() {
     const dur = Math.round(secs());
-    const head = `<div style="display:flex;justify-content:space-between;align-items:center"><div><div class="b" style="font-size:1.125em">主持人</div><div class="small muted">${esc(session.participant)} · ${session.role} · 已用 ${Math.floor(dur / 60)} 分 ${dur % 60} 秒</div></div><button class="iconbtn" aria-label="关闭" data-act="panelClose">${icon('cross', 20, 2.2)}</button></div>`;
-    let body = '';
-    if (mode === 'elder') {
-      body = `${sec('直接跳到')}<div class="chips">
-<button class="chip" data-act="panelJump" data-arg="home">首页</button><button class="chip" data-act="panelJump" data-arg="security">户口保安</button><button class="chip" data-act="panelJump" data-arg="manage">管理页（假设已设定）</button><button class="chip" data-act="panelJump" data-arg="transfer">转账（假设已设定）</button><button class="chip" data-act="panelJump" data-arg="pause">交易暂停（假设已设定）</button></div>
-${sec('联络人接电话吗')}${chipList(['不接听', '接通'], T.callOutcome, 'panelOpt', 'call')}
-${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'panelOpt', 'font')}`;
-    } else {
-      body = `${sec('事后指引短讯')}${chipList(['不显示', '显示'], T.afterGuide ? '显示' : '不显示', 'panelOpt', 'after')}
-${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'panelOpt', 'font')}`;
-    }
-    return `<div class="panelwrap"><div class="panel" role="dialog" aria-modal="true" aria-label="主持人面板">${head}${body}
-<div style="height:4px"></div><button class="btn dark" data-act="panelEnd">结束操作，填写问卷</button><button class="btn s" style="font-size:1em" data-act="panelBrief">再看一次主持说明</button><button class="btn g" data-act="panelAbort">放弃这一场，回到开始页</button></div></div>`;
+    const head = `<div style="display:flex;justify-content:space-between;align-items:center"><div><div class="b" style="font-size:1.125em">组员面板</div><div class="small muted">${esc(session.participant)} · ${session.role} · 已用 ${Math.floor(dur / 60)} 分 ${dur % 60} 秒</div></div><button class="iconbtn" aria-label="关闭" data-act="panelClose">${icon('cross', 20, 2.2)}</button></div>`;
+    const now = session.card ? '' : (mode === 'contact' ? (session.task === 3 ? '看短讯' : '') : (session.task ? '任务 ' + session.task : ''));
+    const body = `${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'panelOpt', 'font')}
+${now ? `<p class="mid ink2">参与者完全卡住、又不想继续时，才用「跳过」。会记录在结果里。</p><button class="btn s" style="font-size:1em" data-act="panelSkip">跳过${now}</button>` : ''}`;
+    return `<div class="panelwrap"><div class="panel" role="dialog" aria-modal="true" aria-label="组员面板">${head}${body}
+<div style="height:4px"></div><button class="btn dark" data-act="panelEnd">直接结束，填写问卷</button><button class="btn g" data-act="panelAbort">放弃这一场，回到开始页</button></div></div>`;
   }
   function openPanel() { if (!session || (mode !== 'elder' && mode !== 'contact')) return; panelOpen = true; ev('panel', '打开'); render(); }
 
@@ -687,59 +788,17 @@ ${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'p
     if (!startForm.participant) startForm.participant = nextParticipantId();
     const n = savedSessions().length;
     const h = `${wm()}<div class="plain">
-<div><h1 class="h1 xl">开始一场测试</h1><p class="ink2" style="margin-top:4px">由组员填写，然后把手机交给参与者。</p></div>
+<div><h1 class="h1 xl">开始一场测试</h1><p class="ink2" style="margin-top:4px">组员选好，按「开始测试」，再把手机交给参与者。</p></div>
 <button class="row" style="border:1px solid var(--line);border-radius:14px" data-act="openRecords"><span class="tile">${icon('bill', 20)}</span><span class="grow"><span class="blk b">测试记录</span><span class="blk small muted">这台手机已保存 ${n} 场 · 查看、复制、导出</span></span>${chev()}</button>
 <div class="card p" style="flex-direction:row;align-items:center;gap:14px"><div class="grow"><div class="small muted">这一场的编号（自动生成，不会重复）</div><div class="b" style="font-size:1.75em;letter-spacing:2px;line-height:1.3">${esc(startForm.participant)}</div></div></div>
 <p class="mid ink2" style="margin-top:-6px">请把这个编号写在你的笔记上，方便之后对上记录。</p>
 <div class="field"><span>这一场测试谁</span>${chipList(['长者', '联络人'], startForm.role, 'startOpt', 'role')}</div>
 ${startForm.err ? `<p class="err" role="alert">${esc(startForm.err)}</p>` : ''}
 <button class="btn p" data-act="startTest">开始测试</button>
-<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">测试中长按顶部「课堂原型」那条（或连按 5 下），可以打开主持人面板：跳画面、调字体、切换联络人接不接电话、结束并填写问卷。</p><p class="mid">请用预填的虚构资料，不要让参与者输入真实姓名或电话。</p></div></div>
+<div class="info">${icon('info', 20)}<div class="stack"><p class="mid"><b>交给参与者后，不用解释，也不要帮他按。</b>屏幕会告诉他要做什么，问卷也由他自己填。</p><p class="mid">参与者问你，就说「按你觉得对的去做」。</p><p class="mid">要调字体、跳过或结束：长按顶部「课堂原型」那条（或连按 5 下）。</p></div></div>
 <a class="btn t" style="text-decoration:none" href="guide.html">测试主持卡</a>
 </div>`;
     return { html: h, key: 'start' };
-  }
-
-  // ---------- 主持说明、角色卡 ----------
-  function renderBrief() {
-    const elder = session.role === '长者';
-    const started = !!session.started;
-    const body = elder ? `
-<div class="qcard"><div class="b">要测什么</div><p>长者看不看得懂联络人能做什么（假设 A）、愿不愿意开这个服务（B）、金额改不改（C），以及大额转账被暂停时会怎么做。</p></div>
-<div class="qcard"><div class="b">四个任务（照读，不要解释）</div><ol>
-<li><b>「银行 App 有一个新功能，你看看。觉得有用，就把它设定好。」</b></li>
-<li><b>「你的『儿子』刚来电，说急需 20 万，叫你马上转到他的新户口：黄志伟。」</b>另一位组员在旁边催：「快点转！别告诉银行！」</li>
-<li><b>「对方说你设定的金额太低，叫你在设定里把单笔调高到 5 万。」</b></li>
-<li>（可选）<b>「你想用智安存里的钱，请申请解锁。」</b></li></ol></div>
-<div class="qcard"><div class="b">主持规则</div><p class="mid">只给任务，不讲解；请他边看边说出想法，记下原话；不要替他按。卡住超过 1 分钟才提示一句。</p></div>
-<div class="qcard"><div class="b">自动记录</div><p class="mid">有没有找到入口、在哪一步放弃、关掉了哪些通知、金额改不改、暂停时先按哪个按钮和隔了几秒、打电话的结果、有没有尝试调高金额或关掉通知。</p></div>
-<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">做完任务：长按顶部「课堂原型」那条 ›「结束操作，填写问卷」，由你读题、代按。</p></div></div>` : `
-<div class="qcard"><div class="b">要测什么</div><p>联络人收到银行通知后，会不会做对的事：<b>亲自联系长者，或打银行官方热线</b>，而不是点链接、回复或不理会（假设 D）。也看他能不能在一堆短讯里认出真的银行通知。</p></div>
-<div class="qcard"><div class="b">怎样做（约 5 分钟）</div><ol>
-<li>按下面的按钮，把手机交给参与者，请他读角色卡。</li>
-<li>照读：<b>「你刚收到几条讯息，看看有什么。」</b>不要提示哪一条是银行的。</li>
-<li>他看完后问：<b>「哪一条是真的银行通知？收到它，你会怎么做？」</b>记下原话。</li>
-<li>长按顶部「课堂原型」那条，把「事后指引短讯」改为「显示」。请他再看汇丰那条，问：<b>「看了这条，你会怎么做？」</b></li>
-<li>长按顶部 ›「结束操作，填写问卷」，由你读题、代按。</li></ol></div>
-<div class="qcard"><div class="b">自动记录</div><p class="mid">先点开哪一条、打开的顺序、在汇丰短讯停留几秒、有没有点开两条诈骗短讯、有没有显示事后指引。</p></div>
-<div class="qcard"><div class="b">问卷会问</div><p class="mid">他指出哪一条是真的银行通知；他会怎么做（打给家人、打官方热线、回复或点链接、不理会）；看了事后指引后会怎么做；最不喜欢哪里。</p></div>
-<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">及格线：至少八成参与者选「打给家人」或「打官方热线」，而且没有选「回复或点链接」。</p></div></div>`;
-    const h = `${wm()}<div class="plain brief">
-<div><div class="small b" style="color:var(--accent)">给组员看 · 编号 ${esc(session.participant)}</div><h1 class="h1 xl" style="margin-top:4px">${elder ? '长者' : '联络人'}测试说明</h1></div>
-${body}
-<button class="btn p" data-act="${started ? 'briefBack' : (elder ? 'beginTest' : 'toRoleCard')}">${started ? '回到测试' : (elder ? '把手机交给参与者，开始' : '下一步：给参与者看角色卡')}</button>
-${started ? '' : '<button class="btn g" data-act="cancelBrief">返回开始页</button>'}
-</div>`;
-    return { html: h, key: 'brief' };
-  }
-  function renderRoleCard() {
-    const h = `${wm()}<div class="plain" style="justify-content:center">
-<div class="qcard" style="gap:12px;padding:20px"><span class="qtag">角色卡</span>
-<p style="font-size:1.125em">你是 <b>陈家明</b>。你的爸爸是 <b>陈国强</b>，一个人住。</p>
-<p style="font-size:1.125em">几个星期前，爸爸在银行登记了你做他的「指定联络人」。</p>
-<p style="font-size:1.125em">现在是下午，你的手机收到几条讯息。</p></div>
-<button class="btn p" data-act="beginTest">打开讯息</button></div>`;
-    return { html: h, key: 'rolecard' };
   }
 
   // ---------- 记录页 ----------
@@ -771,12 +830,12 @@ ${list.length ? '<button class="btn g" style="color:var(--err)" data-act="clearA
   function renderSurvey() {
     const qs = questions();
     const h = `${wm()}<div class="plain">
-<div><h1 class="h1">问卷</h1><p class="ink2" style="margin-top:4px">${esc(session.participant)} · ${session.role}。由组员读题、代按，记下参与者的原话。</p></div>
-${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.tag}</span>` : ''}<div class="b">${i + 1}. ${q.q}</div>${q.type === 'text'
+<div><h1 class="h1 xl">最后几个问题</h1><p class="ink2" style="margin-top:4px">请你自己选，没有对错。选好后按最下面的「提交」。</p></div>
+${qs.map((q, i) => `<div class="qcard"><div class="b">${i + 1}. ${q.q}</div>${q.type === 'text'
       ? `<textarea class="input" data-ans="${q.id}" rows="3">${esc(session.answers[q.id] || '')}</textarea>`
       : chipList(q.opts, session.answers[q.id], q.type === 'multi' ? 'ansMulti' : 'ans', q.id, q.type === 'multi')}</div>`).join('')}
-<button class="btn p" data-act="submitSurvey">提交结果</button>
-<button class="btn g" data-act="backToTest">返回测试画面</button>
+${session.surveyErr ? `<p class="err" role="alert">${esc(session.surveyErr)}</p>` : ''}
+<button class="btn p" data-act="submitSurvey">提交</button>
 </div>`;
     return { html: h, key: 'survey' };
   }
@@ -787,7 +846,9 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
         : submitStatus === 'sending' ? '正在送出…'
           : '送出时出错，结果已保存在这台手机。请按「复制结果」发给组长。';
     const h = `${wm()}<div class="plain">
-<div class="center" style="padding-top:12px">${okCircle()}<h1 class="h1">这一场完成了</h1><p class="ink2">${status}</p></div>
+<div class="center" style="padding-top:12px">${okCircle()}<h1 class="h1 xl">谢谢你！</h1><p class="b">请把手机还给组员。</p></div>
+<div class="sec" style="padding:16px 0 0;border-top:1px solid var(--line)">以下由组员操作</div>
+<p class="ink2">${status}</p>
 <textarea class="result" readonly id="resultText">${esc(r ? r.summary + '\n\n— 问卷 —\n' + r.answersText : '')}</textarea>
 <button class="btn s" data-act="copyResult">复制结果</button>
 <button class="btn p" data-act="nextParticipant">下一位参与者</button>
@@ -804,7 +865,9 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     const L = [];
     const aOk = a.a1 === '不可以' && a.a2 === '不可以';
     const bOk = a.b1 === '一定会' || a.b1 === '可能会';
-    L.push('【判断】A（明白联络人不能做什么）：' + (a.a1 && a.a2 ? (aOk ? '两题都对' : '有答错') : '未答完') + '；B（愿意开）：' + (a.b1 ? (bOk ? '愿意' : '不愿意或不确定') : '未答'));
+    L.push('【判断】A（明白联络人不能做什么）：' + (a.a1 && a.a2 ? (aOk ? '两题都对' : '有答错') : '未答完') + '；B（愿意开）：' + (a.b1 ? (bOk ? '愿意' : '不愿意或不确定') : '未答') + '；自己完成登记：' + (m.setupDoneAt != null ? '是' : '否'));
+    L.push('任务1（看新功能，觉得有用就设定）：' + (m.task1 || '没有做完'));
+    L.push('任务2（照「警察」说的转 20 万）：' + (m.task2 || '没有做完') + (m.autoSeeded ? '；任务1没有登记，任务2前假设已开通' : ''));
     L.push('— 登记 —');
     L.push('看了介绍：' + (m.introAt != null ? '是（第 ' + m.introAt + ' 秒）' : '否'));
     L.push('按「以后再说」：' + m.notNow + ' 次');
@@ -825,34 +888,32 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     const calls = E.filter((e) => e.e === 'call-result').map((e) => e.v);
     if (calls.length) L.push('打电话：' + calls.join('；'));
     L.push('取消交易：' + (E.some((e) => e.e === 'cancel-confirm') ? '是' : '否') + '；打开「到分行核实」：' + (E.some((e) => e.e === 'screen' && e.v === '到分行核实') ? '是' : '否'));
-    L.push('— 减少保护 —');
     const RED = { 'reduce-submit': '提交了', 'reduce-cancel': '看到提示后放弃', 'reduce-cancel-verify': '验证时放弃' };
     const red = E.filter((e) => RED[e.e]).map((e) => e.v + '：' + RED[e.e]);
-    L.push(red.length ? red.join('；') : '没有尝试');
-    L.push('— 智安存 —');
-    L.push('申请解锁：' + (E.some((e) => e.e === 'unlock') ? '是' : '否'));
-    L.push('— 主持人跳转 —');
-    const JUMP = { home: '首页', security: '户口保安', manage: '管理页', transfer: '转账', pause: '交易暂停' };
-    const jumps = E.filter((e) => e.e === 'jump').map((e) => (JUMP[e.v] || e.v) + '（第 ' + Math.round(e.t) + ' 秒）');
-    L.push(jumps.length ? jumps.join('；') : '没有');
+    if (red.length) L.push('自己尝试减少保护：' + red.join('；'));
+    if (E.some((e) => e.e === 'unlock')) L.push('自己申请解锁智安存：是');
+    L.push('— 组员介入 —');
+    const help = E.filter((e) => e.e === 'skip' || e.e === 'end-early').map((e) => e.v + '（第 ' + Math.round(e.t) + ' 秒）');
+    L.push(help.length ? help.join('；') : '没有');
     return L.join('\n');
   }
   function contactSummary() {
     const m = session.m, a = session.answers;
     const d1 = a.d1 || [];
-    const dOk = (d1.indexOf('亲自打给家人（长者）') >= 0 || d1.indexOf('打通讯录里的银行官方热线') >= 0) && d1.indexOf('回复或点链接') < 0;
+    const dOk = (d1.indexOf('亲自打电话给爸爸') >= 0 || d1.indexOf('打通讯录里的银行官方热线') >= 0) && d1.indexOf('回复短讯或点链接') < 0;
+    const help = session.events.filter((e) => e.e === 'skip' || e.e === 'end-early').map((e) => e.v + '（第 ' + Math.round(e.t) + ' 秒）');
     return [
-      '【判断】D（会打官方热线或家人）：' + (d1.length ? (dOk ? '通过' : '不通过') : '未答') + '；认出真通知：' + (a.d0 ? (a.d0 === '#HSBC（正确）' ? '是' : '否（' + a.d0 + '）') : '未答'),
+      '【判断】D（会打给家人或官方热线，而且不点链接）：' + (d1.length ? (dOk ? '通过' : '不通过') : '未答') + '；认出真通知：' + (a.d0 ? (a.d0 === '#HSBC' ? '是' : '否（' + a.d0 + '）') : '未答'),
       '打开顺序：' + (m.opens.length ? m.opens.join(' → ') : '没有打开任何短讯'),
       '第一条打开：' + (m.opens[0] || '—'),
       '#HSBC 短讯停留：' + Math.round(m.hsbcDwell) + ' 秒',
       '打开「户口安全」诈骗短讯：' + (m.opens.indexOf('+852 6000 4410') >= 0 ? '是' : '否') + '；打开「速递」诈骗短讯：' + (m.opens.indexOf('+852 6000 1827') >= 0 ? '是' : '否'),
-      '事后指引短讯：' + (session.afterGuideShown ? '有显示' : '没有显示')
+      '组员介入：' + (help.length ? help.join('；') : '没有')
     ].join('\n');
   }
   function buildRecord() {
     const dur = secs();
-    const head = '参与者：' + session.participant + '（' + session.role + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准') + (session.role === '长者' ? '；联络人接电话：' + T.callOutcome : '');
+    const head = '参与者：' + session.participant + '（' + session.role + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准');
     const body = session.role === '长者' ? elderSummary() : contactSummary();
     const answersText = questions().map((q, i) => (i + 1) + '. ' + q.q + '\n→ ' + fmtAns(session.answers[q.id])).join('\n');
     return {
@@ -1008,32 +1069,64 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     closeThread: () => { closeThread(); render(); },
     // 主持人面板
     panelClose: () => { panelOpen = false; render(); },
-    panelJump: (where) => {
-      panelOpen = false;
-      ev('jump', where);
-      if (where === 'home' || where === 'security') { nav(where); return; }
-      seedReady();
-      if (where === 'manage') nav('tcManage');
-      else if (where === 'transfer') nav('transfer');
-      else if (where === 'pause') { S.paused = { amount: 200000, until: later(), ref: makeRef('TR') }; nav('pause'); }
-    },
     panelOpt: (arg) => {
       const [k, v] = arg.split('|');
-      if (k === 'call') T.callOutcome = v;
       if (k === 'font') T.big = v === '大';
-      if (k === 'after') { T.afterGuide = v === '显示'; if (T.afterGuide) session.afterGuideShown = true; }
       ev('setting', k + '：' + v);
       render();
     },
     panelEnd: () => {
-      panelOpen = false;
-      if (mode === 'contact') closeThread();
-      clearTimeout(callTimer);
-      if (S) S.callState = '';
-      ev('end', '');
-      mode = 'survey';
-      render();
+      if (!window.confirm('现在结束操作，直接填写问卷？')) return;
+      ev('end-early', session.card ? '组员在说明页结束' : '组员提早结束（' + (mode === 'contact' ? '看短讯' : '任务 ' + (session.task || '-')) + '）');
+      toSurvey();
     },
+    panelSkip: () => {
+      panelOpen = false;
+      const n = mode === 'contact' ? 3 : session.task;
+      if (!n) { render(); return; }
+      ev('skip', '组员跳过' + (n === 3 ? '看短讯' : '任务 ' + n));
+      completeTask(n, '组员跳过');
+    },
+    // 任务提示
+    cardGo: () => {
+      const c = session.card, cont = session.reopen;
+      session.card = null; session.reopen = false;
+      if (cont) { ev('task-card', '看完提示，继续'); render(); return; }
+      if (c === 'intro') {
+        session.t0 = Date.now(); session.events = [];
+        ev('consent', '同意参加'); session.card = 'task1'; render(); return;
+      }
+      if (c === 'cintro') {
+        session.t0 = Date.now(); session.events = [];
+        ev('consent', '同意参加'); session.task = 3; ev('task-start', '看短讯'); ev('screen', '讯息列表'); render(); return;
+      }
+      if (c === 'task1') { session.task = 1; ev('task-start', '任务1'); S.screen = 'home'; ev('screen', '首页'); render(); return; }
+      if (c === 'task2') {
+        seedForTask2();
+        Object.assign(session.m, { pauseAt: null, pauseFirst: '', pauseFirstSec: null, task2From: session.events.length });
+        session.task = 2; ev('task-start', '任务2');
+        Object.assign(S, { sheet: '', callState: '', paused: null, amountText: '', noteText: '' });
+        S.screen = '';
+        nav('home');
+      }
+    },
+    cardBack: () => { session.card = null; ev('tap', '还没有，继续'); render(); },
+    decline: () => {
+      if (!window.confirm('不参加也没关系。确定不参加？（这一场不会保存）')) return;
+      resetAll(); render();
+    },
+    reopenTask: () => {
+      if (mode === 'elder' && S) { S.sheet = ''; }
+      if (mode === 'contact' && C && C.open) closeThread();
+      session.card = mode === 'contact' ? 'cintro' : 'task' + session.task;
+      session.reopen = true; ev('task-card', '再看任务提示'); render();
+    },
+    askDone: () => {
+      if (mode === 'elder' && S) { clearTimeout(callTimer); S.callState = ''; S.sheet = ''; }
+      if (mode === 'contact' && C && C.open) closeThread();
+      session.card = 'confirm'; ev('tap', mode === 'contact' ? '看完了' : '做完了'); render();
+    },
+    confirmDone: () => { session.card = null; completeTask(mode === 'contact' ? 3 : session.task, '自己按「做完了」'); },
     panelAbort: () => {
       if (!window.confirm('放弃这一场？这一场的记录不会保存。')) return;
       panelOpen = false; resetAll(); render();
@@ -1048,24 +1141,10 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
       T.callOutcome = '不接听';
       T.afterGuide = false;
       newSession();
-      if (startForm.role === '长者') { S = freshS(); C = null; }
-      else { C = freshC(); S = null; }
-      mode = 'brief';
+      if (startForm.role === '长者') { S = freshS(); C = null; mode = 'elder'; }
+      else { C = freshC(); S = null; mode = 'contact'; }
       render();
     },
-    toRoleCard: () => { mode = 'rolecard'; render(); },
-    beginTest: () => {
-      const elder = session.role === '长者';
-      session.t0 = Date.now();
-      session.events = [];
-      session.started = true;
-      mode = elder ? 'elder' : 'contact';
-      ev('screen', elder ? '首页' : '讯息列表');
-      render();
-    },
-    briefBack: () => { mode = session.role === '长者' ? 'elder' : 'contact'; render(); },
-    cancelBrief: () => { resetAll(); render(); },
-    panelBrief: () => { panelOpen = false; ev('panel', '看主持说明'); mode = 'brief'; render(); },
     exportCsv: () => {
       const list = savedSessions();
       if (!list.length) { window.alert('这台手机还没有记录。'); return; }
@@ -1091,8 +1170,9 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
       if (k >= 0) cur.splice(k, 1); else cur.push(v);
       session.answers[id] = cur; render();
     },
-    backToTest: () => { mode = session.role === '长者' ? 'elder' : 'contact'; render(); },
     submitSurvey: () => {
+      const miss = questions().filter((q) => q.type !== 'text' && !(Array.isArray(session.answers[q.id]) ? session.answers[q.id].length : session.answers[q.id])).length;
+      if (miss && !session.surveyErr) { session.surveyErr = '还有 ' + miss + ' 题没有选。想跳过的话，再按一次「提交」。'; render(); return; }
       const rec = buildRecord();
       lastRecord = rec;
       const list = savedSessions(); list.push(rec); store.set(STORE_KEY, list);
@@ -1120,8 +1200,6 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     else if (mode === 'survey') out = renderSurvey();
     else if (mode === 'submitted') out = renderSubmitted();
     else if (mode === 'records') out = renderRecords();
-    else if (mode === 'brief') out = renderBrief();
-    else if (mode === 'rolecard') out = renderRoleCard();
     else if (mode === 'contact') out = renderContact();
     else out = renderElder();
     const oldScroll = app.querySelector('.scroll, .plain');
