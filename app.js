@@ -114,7 +114,7 @@
   let acceptTimer = null;
   let lastRecord = null;
   let submitStatus = '';
-  const startForm = { participant: '', role: '长者', age: '65–74 岁' };
+  const startForm = { participant: '', role: '长者' };
 
   const freshS = () => ({
     screen: 'home', introFrom: 'security', simFrom: 'tcDone', bannerOpen: true,
@@ -163,7 +163,7 @@
 
   function newSession() {
     session = {
-      participant: startForm.participant.trim(), role: startForm.role, age: startForm.age,
+      participant: startForm.participant.trim(), role: startForm.role, started: false,
       startedAt: new Date().toISOString(), t0: Date.now(), events: [], answers: {}, afterGuideShown: false,
       m: {
         introAt: null, notNow: 0, setupStartAt: null, setupDoneAt: null, lastSetup: '', scenOff: [], amount: '', c1rel: '', addedC2: false,
@@ -678,7 +678,7 @@ ${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'p
 ${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'panelOpt', 'font')}`;
     }
     return `<div class="panelwrap"><div class="panel" role="dialog" aria-modal="true" aria-label="主持人面板">${head}${body}
-<div style="height:4px"></div><button class="btn dark" data-act="panelEnd">结束操作，填写问卷</button><button class="btn g" data-act="panelAbort">放弃这一场，回到开始页</button></div></div>`;
+<div style="height:4px"></div><button class="btn dark" data-act="panelEnd">结束操作，填写问卷</button><button class="btn s" style="font-size:1em" data-act="panelBrief">再看一次主持说明</button><button class="btn g" data-act="panelAbort">放弃这一场，回到开始页</button></div></div>`;
   }
   function openPanel() { if (!session || (mode !== 'elder' && mode !== 'contact')) return; panelOpen = true; ev('panel', '打开'); render(); }
 
@@ -691,14 +691,55 @@ ${sec('字体大小')}${chipList(['标准', '大'], T.big ? '大' : '标准', 'p
 <button class="row" style="border:1px solid var(--line);border-radius:14px" data-act="openRecords"><span class="tile">${icon('bill', 20)}</span><span class="grow"><span class="blk b">测试记录</span><span class="blk small muted">这台手机已保存 ${n} 场 · 查看、复制、导出</span></span>${chev()}</button>
 <div class="card p" style="flex-direction:row;align-items:center;gap:14px"><div class="grow"><div class="small muted">这一场的编号（自动生成，不会重复）</div><div class="b" style="font-size:1.75em;letter-spacing:2px;line-height:1.3">${esc(startForm.participant)}</div></div></div>
 <p class="mid ink2" style="margin-top:-6px">请把这个编号写在你的笔记上，方便之后对上记录。</p>
-<div class="field"><span>角色</span>${chipList(['长者', '联络人'], startForm.role, 'startOpt', 'role')}</div>
-<div class="field"><span>年龄段</span>${chipList(['55 岁以下', '55–64 岁', '65–74 岁', '75 岁或以上'], startForm.age, 'startOpt', 'age')}</div>
+<div class="field"><span>这一场测试谁</span>${chipList(['长者', '联络人'], startForm.role, 'startOpt', 'role')}</div>
 ${startForm.err ? `<p class="err" role="alert">${esc(startForm.err)}</p>` : ''}
 <button class="btn p" data-act="startTest">开始测试</button>
 <div class="info">${icon('info', 20)}<div class="stack"><p class="mid">测试中长按顶部「课堂原型」那条（或连按 5 下），可以打开主持人面板：跳画面、调字体、切换联络人接不接电话、结束并填写问卷。</p><p class="mid">请用预填的虚构资料，不要让参与者输入真实姓名或电话。</p></div></div>
 <a class="btn t" style="text-decoration:none" href="guide.html">测试主持卡</a>
 </div>`;
     return { html: h, key: 'start' };
+  }
+
+  // ---------- 主持说明、角色卡 ----------
+  function renderBrief() {
+    const elder = session.role === '长者';
+    const started = !!session.started;
+    const body = elder ? `
+<div class="qcard"><div class="b">要测什么</div><p>长者看不看得懂联络人能做什么（假设 A）、愿不愿意开这个服务（B）、金额改不改（C），以及大额转账被暂停时会怎么做。</p></div>
+<div class="qcard"><div class="b">四个任务（照读，不要解释）</div><ol>
+<li><b>「银行 App 有一个新功能，你看看。觉得有用，就把它设定好。」</b></li>
+<li><b>「你的『儿子』刚来电，说急需 20 万，叫你马上转到他的新户口：黄志伟。」</b>另一位组员在旁边催：「快点转！别告诉银行！」</li>
+<li><b>「对方说你设定的金额太低，叫你在设定里把单笔调高到 5 万。」</b></li>
+<li>（可选）<b>「你想用智安存里的钱，请申请解锁。」</b></li></ol></div>
+<div class="qcard"><div class="b">主持规则</div><p class="mid">只给任务，不讲解；请他边看边说出想法，记下原话；不要替他按。卡住超过 1 分钟才提示一句。</p></div>
+<div class="qcard"><div class="b">自动记录</div><p class="mid">有没有找到入口、在哪一步放弃、关掉了哪些通知、金额改不改、暂停时先按哪个按钮和隔了几秒、打电话的结果、有没有尝试调高金额或关掉通知。</p></div>
+<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">做完任务：长按顶部「课堂原型」那条 ›「结束操作，填写问卷」，由你读题、代按。</p></div></div>` : `
+<div class="qcard"><div class="b">要测什么</div><p>联络人收到银行通知后，会不会做对的事：<b>亲自联系长者，或打银行官方热线</b>，而不是点链接、回复或不理会（假设 D）。也看他能不能在一堆短讯里认出真的银行通知。</p></div>
+<div class="qcard"><div class="b">怎样做（约 5 分钟）</div><ol>
+<li>按下面的按钮，把手机交给参与者，请他读角色卡。</li>
+<li>照读：<b>「你刚收到几条讯息，看看有什么。」</b>不要提示哪一条是银行的。</li>
+<li>他看完后问：<b>「哪一条是真的银行通知？收到它，你会怎么做？」</b>记下原话。</li>
+<li>长按顶部「课堂原型」那条，把「事后指引短讯」改为「显示」。请他再看汇丰那条，问：<b>「看了这条，你会怎么做？」</b></li>
+<li>长按顶部 ›「结束操作，填写问卷」，由你读题、代按。</li></ol></div>
+<div class="qcard"><div class="b">自动记录</div><p class="mid">先点开哪一条、打开的顺序、在汇丰短讯停留几秒、有没有点开两条诈骗短讯、有没有显示事后指引。</p></div>
+<div class="qcard"><div class="b">问卷会问</div><p class="mid">他指出哪一条是真的银行通知；他会怎么做（打给家人、打官方热线、回复或点链接、不理会）；看了事后指引后会怎么做；最不喜欢哪里。</p></div>
+<div class="info">${icon('info', 20)}<div class="stack"><p class="mid">及格线：至少八成参与者选「打给家人」或「打官方热线」，而且没有选「回复或点链接」。</p></div></div>`;
+    const h = `${wm()}<div class="plain brief">
+<div><div class="small b" style="color:var(--accent)">给组员看 · 编号 ${esc(session.participant)}</div><h1 class="h1 xl" style="margin-top:4px">${elder ? '长者' : '联络人'}测试说明</h1></div>
+${body}
+<button class="btn p" data-act="${started ? 'briefBack' : (elder ? 'beginTest' : 'toRoleCard')}">${started ? '回到测试' : (elder ? '把手机交给参与者，开始' : '下一步：给参与者看角色卡')}</button>
+${started ? '' : '<button class="btn g" data-act="cancelBrief">返回开始页</button>'}
+</div>`;
+    return { html: h, key: 'brief' };
+  }
+  function renderRoleCard() {
+    const h = `${wm()}<div class="plain" style="justify-content:center">
+<div class="qcard" style="gap:12px;padding:20px"><span class="qtag">角色卡</span>
+<p style="font-size:1.125em">你是 <b>陈家明</b>。你的爸爸是 <b>陈国强</b>，一个人住。</p>
+<p style="font-size:1.125em">几个星期前，爸爸在银行登记了你做他的「指定联络人」。</p>
+<p style="font-size:1.125em">现在是下午，你的手机收到几条讯息。</p></div>
+<button class="btn p" data-act="beginTest">打开讯息</button></div>`;
+    return { html: h, key: 'rolecard' };
   }
 
   // ---------- 记录页 ----------
@@ -811,11 +852,11 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
   }
   function buildRecord() {
     const dur = secs();
-    const head = '参与者：' + session.participant + '（' + session.role + '，' + session.age + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准') + (session.role === '长者' ? '；联络人接电话：' + T.callOutcome : '');
+    const head = '参与者：' + session.participant + '（' + session.role + '）\n开始：' + new Date(session.startedAt).toLocaleString('zh-CN', { hour12: false }) + '；用时：' + fmtDur(dur) + '；字体：' + (T.big ? '大' : '标准') + (session.role === '长者' ? '；联络人接电话：' + T.callOutcome : '');
     const body = session.role === '长者' ? elderSummary() : contactSummary();
     const answersText = questions().map((q, i) => (i + 1) + '. ' + q.q + '\n→ ' + fmtAns(session.answers[q.id])).join('\n');
     return {
-      participant: session.participant, role: session.role, age: session.age,
+      participant: session.participant, role: session.role,
       startedAt: session.startedAt, durationSec: Math.round(dur), summary: head + '\n' + body, answersText: answersText,
       answers: session.answers, events: session.events
     };
@@ -834,8 +875,8 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
   }
   function csvOf(list) {
     const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const head = ['参与者', '角色', '年龄段', '开始时间', '用时（秒）', '摘要', '问卷答案', '事件记录'];
-    const rows = list.map((r) => [r.participant, r.role, r.age, r.startedAt, r.durationSec, r.summary, r.answersText, JSON.stringify(r.events)].map(cell).join(','));
+    const head = ['参与者', '角色', '开始时间', '用时（秒）', '摘要', '问卷答案', '事件记录'];
+    const rows = list.map((r) => [r.participant, r.role, r.startedAt, r.durationSec, r.summary, r.answersText, JSON.stringify(r.events)].map(cell).join(','));
     return '﻿' + [head.map(cell).join(',')].concat(rows).join('\r\n');
   }
   function download(name, text) {
@@ -1007,10 +1048,24 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
       T.callOutcome = '不接听';
       T.afterGuide = false;
       newSession();
-      if (startForm.role === '长者') { S = freshS(); C = null; mode = 'elder'; ev('screen', '首页'); }
-      else { C = freshC(); S = null; mode = 'contact'; ev('screen', '讯息列表'); }
+      if (startForm.role === '长者') { S = freshS(); C = null; }
+      else { C = freshC(); S = null; }
+      mode = 'brief';
       render();
     },
+    toRoleCard: () => { mode = 'rolecard'; render(); },
+    beginTest: () => {
+      const elder = session.role === '长者';
+      session.t0 = Date.now();
+      session.events = [];
+      session.started = true;
+      mode = elder ? 'elder' : 'contact';
+      ev('screen', elder ? '首页' : '讯息列表');
+      render();
+    },
+    briefBack: () => { mode = session.role === '长者' ? 'elder' : 'contact'; render(); },
+    cancelBrief: () => { resetAll(); render(); },
+    panelBrief: () => { panelOpen = false; ev('panel', '看主持说明'); mode = 'brief'; render(); },
     exportCsv: () => {
       const list = savedSessions();
       if (!list.length) { window.alert('这台手机还没有记录。'); return; }
@@ -1065,6 +1120,8 @@ ${qs.map((q, i) => `<div class="qcard">${q.tag ? `<span class="qtag">假设 ${q.
     else if (mode === 'survey') out = renderSurvey();
     else if (mode === 'submitted') out = renderSubmitted();
     else if (mode === 'records') out = renderRecords();
+    else if (mode === 'brief') out = renderBrief();
+    else if (mode === 'rolecard') out = renderRoleCard();
     else if (mode === 'contact') out = renderContact();
     else out = renderElder();
     const oldScroll = app.querySelector('.scroll, .plain');
